@@ -210,21 +210,17 @@
   </div>
 
   <script>
-    // --- Configuración del Broker HiveMQ Cloud ---
-    // Usamos el protocolo WSS (WebSocket Seguro) por el puerto 8884 obligatorio para navegadores web
-    const brokerUrl = '{{MQTT_BROKER_URL}}';
+    const brokerUrl = 'wss://74726e31dc8a45ed98a0516a78fb9dbd.s1.eu.hivemq.cloud:8884/mqtt';
     
-    // Opciones de conexión y credenciales de acceso HiveMQ
     const options = {
       clientId: 'WebClient_' + Math.random().toString(16).substr(2, 8),
-      username: '{{MQTT_USERNAME}}',
-      password: '{{MQTT_PASSWORD}}',
+      username: 'useradmin',
+      password: 'User123456',
       clean: true,
-      connectTimeout: 4000,
-      reconnectPeriod: 2000,
+      connectTimeout: 10000,
+      reconnectPeriod: 5000,
     };
 
-    // Elementos del DOM a actualizar
     const statusDot = document.getElementById('statusDot');
     const statusText = document.getElementById('statusText');
     const tempValue = document.getElementById('tempValue');
@@ -232,40 +228,42 @@
     const tempContainer = document.getElementById('tempContainer');
     const humContainer = document.getElementById('humContainer');
 
-    // Inicializar conexión MQTT
     const client = mqtt.connect(brokerUrl, options);
 
     client.on('connect', () => {
-      console.log('Conectado a MQTT vía WebSocket con TLS');
-      statusDot.style.backgroundColor = '#22c55e'; // Verde de éxito
+      console.log('Conectado a MQTT');
+      statusDot.style.backgroundColor = '#22c55e';
       statusDot.style.boxShadow = '0 0 12px #22c55e';
-      statusText.innerText = 'Conectado en tiempo real';
+      statusText.innerText = 'Conectado';
       
-      // Suscribirse al tópico de datos ambientales del ESP32
       client.subscribe('sensor/datos_ambientales');
+      client.subscribe('sensor/estado');
+      console.log('Suscrito a sensor/datos_ambientales');
     });
 
     client.on('reconnect', () => {
-      statusText.innerText = 'Reconectando con HiveMQ...';
-      statusDot.style.backgroundColor = '#eab308'; // Amarillo
+      statusText.innerText = 'Reconectando...';
+      statusDot.style.backgroundColor = '#eab308';
       statusDot.style.boxShadow = '0 0 10px #eab308';
     });
 
     client.on('offline', () => {
-        statusText.innerText = 'Desconectado del Broker';
-        statusDot.style.backgroundColor = '#ef4444'; // Rojo alarma
-        statusDot.style.boxShadow = '0 0 10px #ef4444';
+      statusText.innerText = 'Desconectado';
+      statusDot.style.backgroundColor = '#ef4444';
+      statusDot.style.boxShadow = '0 0 10px #ef4444';
     });
 
     client.on('error', (err) => {
-      console.error('Error de conexión SSL/MQTT:', err);
+      console.error('Error MQTT:', err);
     });
 
-    // Función para procesar y animar los mensajes recibidos
     client.on('message', (topic, message) => {
+      console.log('Mensaje recibido - Topic:', topic, 'Payload:', message.toString());
+      
       if (topic === 'sensor/datos_ambientales') {
         try {
           const data = JSON.parse(message.toString());
+          console.log('Datos parseados:', data);
           
           if (data.temperatura !== undefined) {
             tempValue.innerText = data.temperatura;
@@ -281,11 +279,17 @@
             humContainer.classList.add('updated');
           }
         } catch (e) {
-          console.error('Error al parsear JSON:', e);
+          console.error('Error JSON:', e);
         }
+      } else if (topic === 'sensor/estado') {
+        console.log('Estado:', message.toString());
       }
     });
 
+    // Debug: mostrar todos los mensajes en consola
+    client.on('packetreceive', (packet) => {
+      console.log('Paquete recibido:', packet);
+    });
   </script>
 </body>
 </html>
