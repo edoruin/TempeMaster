@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard TempeMaster</title>
+  
+  <!-- Usamos la librería MQTT.js desde un CDN para conectarnos desde el navegador -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  
+  <!-- Tipografía moderna -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #0c1222;
+      --card-bg: rgba(30, 41, 59, 0.4);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-temp: #f43f5e;
+      --accent-hum: #0ea5e9;
+      --accent-glow: rgba(56, 189, 248, 0.15);
+    }
+    
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background-image: 
+        radial-gradient(circle at top right, #1e293b 0%, transparent 40%),
+        radial-gradient(circle at bottom left, #0f172a 0%, transparent 40%);
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -1px;
+    }
+
+    .status-container {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 0.5rem 1rem;
+      border-radius: 2rem;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #ef4444; /* Rojo por defecto */
+      transition: background-color 0.3s ease;
+      box-shadow: 0 0 10px #ef4444;
+    }
+
+    .dashboard {
+      display: flex;
+      gap: 2.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* Estilo "Glassmorphism" para las tarjetas */
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 1.5rem;
+      padding: 3rem 2rem;
+      width: 280px;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, var(--accent-glow) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      pointer-events: none;
+    }
+
+    .card:hover { 
+      transform: translateY(-10px); 
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .card:hover::before {
+      opacity: 1;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .card-value {
+      font-size: 4.5rem;
+      font-weight: 800;
+      margin-top: 1rem;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      text-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    .card-unit {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-left: 0.3rem;
+      opacity: 0.8;
+    }
+
+    .card.temp .card-value { color: var(--accent-temp); }
+    .card.hum .card-value { color: var(--accent-hum); }
+
+    .card-icon {
+      font-size: 3.5rem;
+      margin-bottom: 1rem;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
+    }
+
+    /* Animación para indicar actualización de datos */
+    @keyframes pulse-update {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    .updated {
+      animation: pulse-update 0.4s ease;
+    }
+
+    /* Diseño responsivo */
+    @media (max-width: 650px) {
+      .dashboard { flex-direction: column; }
+      h1 { font-size: 2.2rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>TempeMaster</h1>
+    <div class="status-container">
+      <div id="statusDot" class="status-dot"></div>
+      <span id="statusText">Buscando conexión MQTT...</span>
+    </div>
+  </header>
+
+  <div class="dashboard">
+    <!-- Tarjeta Temperatura -->
+    <div class="card temp">
+      <div class="card-icon">🌡️</div>
+      <div class="card-title">Temperatura</div>
+      <div class="card-value" id="tempContainer">
+        <span id="tempValue">--</span>
+        <span class="card-unit">°C</span>
+      </div>
+    </div>
+
+    <!-- Tarjeta Humedad -->
+    <div class="card hum">
+      <div class="card-icon">💧</div>
+      <div class="card-title">Humedad</div>
+      <div class="card-value" id="humContainer">
+        <span id="humValue">--</span>
+        <span class="card-unit">%</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const brokerUrl = 'wss://74726e31dc8a45ed98a0516a78fb9dbd.s1.eu.hivemq.cloud:8884/mqtt';
+    
+    const options = {
+      clientId: 'WebClient_' + Math.random().toString(16).substr(2, 8),
+      username: 'useradmin',
+      password: 'User123456',
+      clean: true,
+      connectTimeout: 4000,
+      reconnectPeriod: 2000,
+    };
+
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const tempValue = document.getElementById('tempValue');
+    const humValue = document.getElementById('humValue');
+    const tempContainer = document.getElementById('tempContainer');
+    const humContainer = document.getElementById('humContainer');
+
+    const client = mqtt.connect(brokerUrl, options);
+
+    client.on('connect', () => {
+      console.log('Conectado a MQTT vía WebSocket con TLS');
+      statusDot.style.backgroundColor = '#22c55e';
+      statusDot.style.boxShadow = '0 0 12px #22c55e';
+      statusText.innerText = 'Conectado en tiempo real';
+      
+      client.subscribe('sensor/datos_ambientales');
+    });
+
+    client.on('reconnect', () => {
+      statusText.innerText = 'Reconectando con HiveMQ...';
+      statusDot.style.backgroundColor = '#eab308';
+      statusDot.style.boxShadow = '0 0 10px #eab308';
+    });
+
+    client.on('offline', () => {
+        statusText.innerText = 'Desconectado del Broker';
+        statusDot.style.backgroundColor = '#ef4444';
+        statusDot.style.boxShadow = '0 0 10px #ef4444';
+    });
+
+    client.on('error', (err) => {
+      console.error('Error de conexión SSL/MQTT:', err);
+    });
+
+    client.on('message', (topic, message) => {
+      if (topic === 'sensor/datos_ambientales') {
+        try {
+          const data = JSON.parse(message.toString());
+          
+          if (data.temperatura !== undefined) {
+            tempValue.innerText = data.temperatura;
+            tempContainer.classList.remove('updated');
+            void tempContainer.offsetWidth;
+            tempContainer.classList.add('updated');
+          }
+          
+          if (data.humedad !== undefined) {
+            humValue.innerText = data.humedad;
+            humContainer.classList.remove('updated');
+            void humContainer.offsetWidth;
+            humContainer.classList.add('updated');
+          }
+        } catch (e) {
+          console.error('Error al parsear JSON:', e);
+        }
+      }
+    });
+
+  </script>
+</body>
+</html>
