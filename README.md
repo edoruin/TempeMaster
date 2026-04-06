@@ -1,6 +1,3 @@
-# Sistema de Monitoreo de Temperatura y Humedad - Politécnico
-
-11. [Futuras Mejoras](#futuras-mejoras)
 
 ---
 
