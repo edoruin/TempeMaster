@@ -410,11 +410,19 @@
       <h2>⚙️ Configuración MQTT</h2>
       <div class="form-group">
         <label>Broker MQTT (URL)</label>
-        <input type="text" id="brokerUrl" placeholder="broker.emqx.io">
+        <input type="text" id="brokerUrl" placeholder="74726e31dc8a45ed98a0516a78fb9dbd.s1.eu.hivemq.cloud">
       </div>
       <div class="form-group">
         <label>Puerto WebSocket</label>
-        <input type="number" id="brokerPort" placeholder="8083">
+        <input type="number" id="brokerPort" placeholder="8884">
+      </div>
+      <div class="form-group">
+        <label>Usuario</label>
+        <input type="text" id="brokerUser" placeholder="useradmin">
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="brokerPass" placeholder="User123456">
       </div>
       <div class="form-group">
         <label>Timeout (segundos)</label>
@@ -452,8 +460,10 @@
 
     function getDefaultConfig() {
       return {
-        brokerUrl: 'broker.emqx.io',
-        brokerPort: '8083',
+        brokerUrl: '74726e31dc8a45ed98a0516a78fb9dbd.s1.eu.hivemq.cloud',
+        brokerPort: '8884',
+        brokerUser: 'useradmin',
+        brokerPass: 'User123456',
         timeout: '60',
         demoMode: false
       };
@@ -468,6 +478,8 @@
       const config = {
         brokerUrl: document.getElementById('brokerUrl').value,
         brokerPort: document.getElementById('brokerPort').value,
+        brokerUser: document.getElementById('brokerUser').value,
+        brokerPass: document.getElementById('brokerPass').value,
         timeout: document.getElementById('timeout').value,
         demoMode: document.getElementById('demoMode').checked
       };
@@ -480,6 +492,8 @@
       const config = loadConfig();
       document.getElementById('brokerUrl').value = config.brokerUrl;
       document.getElementById('brokerPort').value = config.brokerPort;
+      document.getElementById('brokerUser').value = config.brokerUser || '';
+      document.getElementById('brokerPass').value = config.brokerPass || '';
       document.getElementById('timeout').value = config.timeout;
       document.getElementById('demoMode').checked = config.demoMode;
       document.getElementById('configModal').classList.add('active');
@@ -514,13 +528,17 @@
 
       document.getElementById('demoNotice').style.display = 'none';
 
-      const brokerUrl = `ws://${config.brokerUrl}:${config.brokerPort}/mqtt`;
+      const brokerUrl = `wss://${config.brokerUrl}:${config.brokerPort}/mqtt`;
 
       try {
         client = mqtt.connect(brokerUrl, {
           clientId: 'dashboard_' + Math.random().toString(16).substr(2, 8),
-          keepalive: 30,
-          reconnectPeriod: 5000
+          username: config.brokerUser,
+          password: config.brokerPass,
+          clean: true,
+          connectTimeout: 4000,
+          reconnectPeriod: 2000,
+          keepalive: 30
         });
 
         client.on('connect', () => {
@@ -531,6 +549,12 @@
             client.subscribe(topics.temp);
             client.subscribe(topics.hum);
           });
+        });
+
+        client.on('reconnect', () => {
+          document.getElementById('statusText').textContent = 'Reconectando con HiveMQ...';
+          document.getElementById('statusDot').style.backgroundColor = '#eab308';
+          document.getElementById('statusDot').style.boxShadow = '0 0 10px #eab308';
         });
 
         client.on('message', (topic, message) => {
@@ -643,6 +667,8 @@
       const config = loadConfig();
       document.getElementById('brokerUrl').value = config.brokerUrl;
       document.getElementById('brokerPort').value = config.brokerPort;
+      document.getElementById('brokerUser').value = config.brokerUser || '';
+      document.getElementById('brokerPass').value = config.brokerPass || '';
       document.getElementById('timeout').value = config.timeout;
       document.getElementById('demoMode').checked = config.demoMode;
 
