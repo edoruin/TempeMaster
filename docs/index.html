@@ -6,6 +6,7 @@
   <title>Dashboard IoT - Temperatura por Zonas</title>
   
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
   
@@ -319,6 +320,34 @@
       animation: pulse-update 0.4s ease;
     }
 
+    .style-options {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 1.5rem;
+    }
+
+    .style-btn {
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.5rem;
+      color: var(--text-main);
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .style-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: #38bdf8;
+    }
+
+    .style-btn.active {
+      background: #38bdf8;
+      color: #000;
+    }
+
     @media (max-width: 600px) {
       .house-plan {
         grid-template-columns: 1fr;
@@ -340,7 +369,7 @@
       <div id="statusDot" class="status-dot"></div>
       <span id="statusText">Desconectado</span>
     </div>
-    <button class="config-btn" onclick="openConfig()">⚙️ Demo</button>
+    <button class="config-btn" onclick="openStyles()">🎨 Estilos</button>
   </header>
 
   <div id="demoNotice" class="demo-notice" style="display: none;">
@@ -405,19 +434,30 @@
     </div>
   </div>
 
-  <div class="modal" id="configModal">
+  <div class="modal" id="styleModal">
     <div class="modal-content">
-      <h2>⚙️ Configuración</h2>
-      <div class="form-group checkbox">
-        <input type="checkbox" id="demoMode">
-        <label style="margin-bottom: 0;">Modo Demo (simular datos)</label>
+      <h2>🎨 Seleccionar Estilo</h2>
+      <div class="style-options">
+        <button class="style-btn" onclick="setStyle('dark')">
+          🌙 Oscuro
+        </button>
+        <button class="style-btn" onclick="setStyle('light')">
+          ☀️ Claro
+        </button>
+        <button class="style-btn" onclick="setStyle('particles')">
+          ✨ Partículas
+        </button>
+        <button class="style-btn" onclick="setStyle('gradient')">
+          🌈 Gradiente
+        </button>
       </div>
       <div class="modal-buttons">
-        <button class="btn btn-secondary" onclick="closeConfig()">Cerrar</button>
-        <button class="btn btn-primary" onclick="saveConfig()">Guardar</button>
+        <button class="btn btn-secondary" onclick="closeStyles()">Cerrar</button>
       </div>
     </div>
   </div>
+
+  <div id="particlesCanvas" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1;"></div>
 
   <script>
     const MQTT_SECRETS = {
@@ -482,6 +522,123 @@
       document.getElementById('configModal').classList.remove('active');
     }
 
+    function openStyles() {
+      document.getElementById('styleModal').classList.add('active');
+    }
+
+    function closeStyles() {
+      document.getElementById('styleModal').classList.remove('active');
+    }
+
+    function setStyle(styleName) {
+      const root = document.documentElement;
+      const particlesCanvas = document.getElementById('particlesCanvas');
+      
+      if (styleName === 'dark') {
+        root.style.setProperty('--bg-color', '#0c1222');
+        root.style.setProperty('--card-bg', 'rgba(30, 41, 59, 0.4)');
+        root.style.setProperty('--text-main', '#f8fafc');
+        root.style.setProperty('--text-muted', '#94a3b8');
+        particlesCanvas.style.display = 'none';
+        if (window.particlesScene) {
+          window.particlesScene.destroy();
+          window.particlesScene = null;
+        }
+      } else if (styleName === 'light') {
+        root.style.setProperty('--bg-color', '#f0f4f8');
+        root.style.setProperty('--card-bg', 'rgba(255, 255, 255, 0.8)');
+        root.style.setProperty('--text-main', '#1e293b');
+        root.style.setProperty('--text-muted', '#64748b');
+        particlesCanvas.style.display = 'none';
+        if (window.particlesScene) {
+          window.particlesScene.destroy();
+          window.particlesScene = null;
+        }
+      } else if (styleName === 'particles') {
+        root.style.setProperty('--bg-color', '#0c1222');
+        root.style.setProperty('--card-bg', 'rgba(30, 41, 59, 0.4)');
+        root.style.setProperty('--text-main', '#f8fafc');
+        root.style.setProperty('--text-muted', '#94a3b8');
+        initParticles();
+      } else if (styleName === 'gradient') {
+        root.style.setProperty('--bg-color', '#1a1a2e');
+        root.style.setProperty('--card-bg', 'rgba(255, 255, 255, 0.1)');
+        root.style.setProperty('--text-main', '#ffffff');
+        root.style.setProperty('--text-muted', '#a0a0a0');
+        particlesCanvas.style.display = 'none';
+        if (window.particlesScene) {
+          window.particlesScene.destroy();
+          window.particlesScene = null;
+        }
+        document.body.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+      }
+      
+      localStorage.setItem('dashboardStyle', styleName);
+      closeStyles();
+    }
+
+    function initParticles() {
+      const container = document.getElementById('particlesCanvas');
+      container.style.display = 'block';
+      
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      container.appendChild(renderer.domElement);
+
+      const particlesGeometry = new THREE.BufferGeometry();
+      const particlesCount = 1500;
+      const posArray = new Float32Array(particlesCount * 3);
+
+      for(let i = 0; i < particlesCount * 3; i++) {
+        posArray[i] = (Math.random() - 0.5) * 10;
+      }
+
+      particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+      
+      const particlesMaterial = new THREE.PointsMaterial({
+        size: 0.02,
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.8
+      });
+
+      const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+      scene.add(particlesMesh);
+      camera.position.z = 3;
+
+      function animate() {
+        requestAnimationFrame(animate);
+        particlesMesh.rotation.y += 0.001;
+        particlesMesh.rotation.x += 0.0005;
+        renderer.render(scene, camera);
+      }
+
+      animate();
+
+      window.particlesScene = {
+        scene,
+        camera,
+        renderer,
+        destroy: () => {
+          renderer.dispose();
+          container.removeChild(renderer.domElement);
+        }
+      };
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    const savedStyle = localStorage.getItem('dashboardStyle');
+    if (savedStyle === 'particles') {
+      setTimeout(initParticles, 100);
+    }
+
     function connectMQTT() {
       const config = loadConfig();
       timeout = parseInt(config.timeout) * 1000;
@@ -491,7 +648,6 @@
         demoInterval = null;
       }
 
-      if (demoInterval) clearInterval(demoInterval);
       if (client) {
         client.end();
         client = null;
