@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard IoT - Temperatura por Zonas</title>
+  
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #0c1222;
+      --card-bg: rgba(30, 41, 59, 0.4);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-cold: #0ea5e9;
+      --accent-normal: #22c55e;
+      --accent-hot: #f43f5e;
+      --disconnected: #4a5568;
+      --wall-color: #3d3d5c;
+      --floor-color: rgba(30, 41, 59, 0.6);
+    }
+    
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 20px;
+      background-image: 
+        radial-gradient(circle at top right, #1e293b 0%, transparent 40%),
+        radial-gradient(circle at bottom left, #0f172a 0%, transparent 40%);
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding: 1rem 1.5rem;
+      background: var(--card-bg);
+      border-radius: 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-container {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #ef4444;
+      transition: background-color 0.3s ease;
+      box-shadow: 0 0 10px #ef4444;
+    }
+
+    .status-dot.connected {
+      background-color: #22c55e;
+      box-shadow: 0 0 12px #22c55e;
+    }
+
+    .config-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.3s;
+    }
+
+    .config-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .house-plan {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 15px;
+      max-width: 900px;
+      margin: 0 auto;
+      aspect-ratio: 1;
+    }
+
+    .room {
+      position: relative;
+      background: var(--floor-color);
+      border: 4px solid var(--wall-color);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      overflow: hidden;
+      padding: 1rem;
+    }
+
+    .room:hover {
+      transform: translateY(-5px);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .room.disconnected {
+      background: rgba(74, 85, 104, 0.3);
+      border-color: var(--disconnected);
+    }
+
+    .room.disconnected:hover {
+      transform: none;
+    }
+
+    .room-label {
+      position: absolute;
+      top: 12px;
+      left: 15px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+
+    .room-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+      opacity: 0.4;
+    }
+
+    .sensor-data {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transition: opacity 0.3s;
+    }
+
+    .room.disconnected .sensor-data {
+      opacity: 0.3;
+    }
+
+    .temp-display {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 2.2rem;
+      font-weight: 800;
+    }
+
+    .temp-display.cold { color: var(--accent-cold); }
+    .temp-display.normal { color: var(--accent-normal); }
+    .temp-display.hot { color: var(--accent-hot); }
+
+    .humidity-display {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 1rem;
+      color: var(--text-muted);
+    }
+
+    .sensor-badge {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.7rem;
+      margin-top: 8px;
+      color: var(--text-muted);
+    }
+
+    .last-update {
+      position: absolute;
+      bottom: 8px;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--bg-color);
+      padding: 2rem;
+      border-radius: 1rem;
+      max-width: 400px;
+      width: 90%;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .modal-content h2 {
+      margin-bottom: 1.5rem;
+      font-size: 1.2rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 0.75rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 0.5rem;
+      color: var(--text-main);
+      font-size: 1rem;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #38bdf8;
+    }
+
+    .form-group.checkbox {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .form-group.checkbox input {
+      width: auto;
+    }
+
+    .modal-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 1.5rem;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 0.75rem;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background: #22c55e;
+      color: #000;
+      font-weight: 600;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+      transform: translateY(-2px);
+    }
+
+    .demo-notice {
+      background: rgba(34, 197, 94, 0.2);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1.5rem;
+      text-align: center;
+      font-size: 0.9rem;
+      color: #22c55e;
+    }
+
+    @keyframes pulse-update {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    .updated {
+      animation: pulse-update 0.4s ease;
+    }
+
+    @media (max-width: 600px) {
+      .house-plan {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, 140px);
+      }
+      
+      header {
+        flex-direction: column;
+        gap: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🌡️ Monitor de Temperatura</h1>
+    <div class="status-container">
+      <div id="statusDot" class="status-dot"></div>
+      <span id="statusText">Desconectado</span>
+    </div>
+    <button class="config-btn" onclick="openConfig()">⚙️ Configurar</button>
+  </header>
+
+  <div id="demoNotice" class="demo-notice" style="display: none;">
+    🔧 Modo Demo: Los datos se simulan automáticamente
+  </div>
+
+  <div class="house-plan">
+    <div class="room" id="cancha">
+      <span class="room-label">Cancha</span>
+      <span class="room-icon">🏀</span>
+      <div class="sensor-data">
+        <div class="temp-display" id="temp-cancha">--°C</div>
+        <div class="humidity-display">
+          <span>💧</span>
+          <span id="hum-cancha">--%</span>
+        </div>
+        <div class="sensor-badge" id="device-cancha">Sin sensor</div>
+      </div>
+      <span class="last-update" id="update-cancha">--</span>
+    </div>
+
+    <div class="room" id="makerspace">
+      <span class="room-label">Makerspace</span>
+      <span class="room-icon">🔧</span>
+      <div class="sensor-data">
+        <div class="temp-display" id="temp-makerspace">--°C</div>
+        <div class="humidity-display">
+          <span>💧</span>
+          <span id="hum-makerspace">--%</span>
+        </div>
+        <div class="sensor-badge" id="device-makerspace">Sin sensor</div>
+      </div>
+      <span class="last-update" id="update-makerspace">--</span>
+    </div>
+
+    <div class="room" id="comedor">
+      <span class="room-label">Comedor</span>
+      <span class="room-icon">🍽️</span>
+      <div class="sensor-data">
+        <div class="temp-display" id="temp-comedor">--°C</div>
+        <div class="humidity-display">
+          <span>💧</span>
+          <span id="hum-comedor">--%</span>
+        </div>
+        <div class="sensor-badge" id="device-comedor">Sin sensor</div>
+      </div>
+      <span class="last-update" id="update-comedor">--</span>
+    </div>
+
+    <div class="room" id="zonaverde">
+      <span class="room-label">Zona Verde</span>
+      <span class="room-icon">🌿</span>
+      <div class="sensor-data">
+        <div class="temp-display" id="temp-zonaverde">--°C</div>
+        <div class="humidity-display">
+          <span>💧</span>
+          <span id="hum-zonaverde">--%</span>
+        </div>
+        <div class="sensor-badge" id="device-zonaverde">Sin sensor</div>
+      </div>
+      <span class="last-update" id="update-zonaverde">--</span>
+    </div>
+  </div>
+
+  <div class="modal" id="configModal">
+    <div class="modal-content">
+      <h2>⚙️ Configuración MQTT</h2>
+      <div class="form-group">
+        <label>Broker MQTT (URL)</label>
+        <input type="text" id="brokerUrl" placeholder="74726e31dc8a45ed98a0516a78fb9dbd.s1.eu.hivemq.cloud">
+      </div>
+      <div class="form-group">
+        <label>Puerto WebSocket</label>
+        <input type="number" id="brokerPort" placeholder="8884">
+      </div>
+      <div class="form-group">
+        <label>Usuario</label>
+        <input type="text" id="brokerUser" placeholder="useradmin">
+      </div>
+      <div class="form-group">
+        <label>Contraseña</label>
+        <input type="password" id="brokerPass" placeholder="User123456">
+      </div>
+      <div class="form-group">
+        <label>Timeout (segundos)</label>
+        <input type="number" id="timeout" value="60">
+      </div>
+      <div class="form-group checkbox">
+        <input type="checkbox" id="demoMode">
+        <label style="margin-bottom: 0;">Modo Demo (simular datos)</label>
+      </div>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" onclick="closeConfig()">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveConfig()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const topicMapping = {
+      'cancha': { temp: 'sensor/cancha/temperatura', hum: 'sensor/cancha/humedad' },
+      'makerspace': { temp: 'sensor/makerspace/temperatura', hum: 'sensor/makerspace/humedad' },
+      'comedor': { temp: 'sensor/comedor/temperatura', hum: 'sensor/comedor/humedad' },
+      'zonaverde': { temp: 'sensor/zonaverde/temperatura', hum: 'sensor/zonaverde/humedad' }
+    };
+
+    let client = null;
+    let sensorData = {
+      cancha: { temp: null, hum: null, lastUpdate: null },
+      makerspace: { temp: null, hum: null, lastUpdate: null },
+      comedor: { temp: null, hum: null, lastUpdate: null },
+      zonaverde: { temp: null, hum: null, lastUpdate: null }
+    };
+    let timeout = 60000;
+    let checkTimeout = null;
+    let demoInterval = null;
+
+    function getDefaultConfig() {
+      return {
+        brokerUrl: '74726e31dc8a45ed98a0516a78fb9dbd.s1.eu.hivemq.cloud',
+        brokerPort: '8884',
+        brokerUser: 'useradmin',
+        brokerPass: 'User123456',
+        timeout: '60',
+        demoMode: false
+      };
+    }
+
+    function loadConfig() {
+      const saved = localStorage.getItem('mqttDashboardConfig');
+      return saved ? JSON.parse(saved) : getDefaultConfig();
+    }
+
+    function saveConfig() {
+      const config = {
+        brokerUrl: document.getElementById('brokerUrl').value,
+        brokerPort: document.getElementById('brokerPort').value,
+        brokerUser: document.getElementById('brokerUser').value,
+        brokerPass: document.getElementById('brokerPass').value,
+        timeout: document.getElementById('timeout').value,
+        demoMode: document.getElementById('demoMode').checked
+      };
+      localStorage.setItem('mqttDashboardConfig', JSON.stringify(config));
+      closeConfig();
+      connectMQTT();
+    }
+
+    function openConfig() {
+      const config = loadConfig();
+      document.getElementById('brokerUrl').value = config.brokerUrl;
+      document.getElementById('brokerPort').value = config.brokerPort;
+      document.getElementById('brokerUser').value = config.brokerUser || '';
+      document.getElementById('brokerPass').value = config.brokerPass || '';
+      document.getElementById('timeout').value = config.timeout;
+      document.getElementById('demoMode').checked = config.demoMode;
+      document.getElementById('configModal').classList.add('active');
+    }
+
+    function closeConfig() {
+      document.getElementById('configModal').classList.remove('active');
+    }
+
+    function connectMQTT() {
+      const config = loadConfig();
+      timeout = parseInt(config.timeout) * 1000;
+
+      if (demoInterval) {
+        clearInterval(demoInterval);
+        demoInterval = null;
+      }
+
+      if (demoInterval) clearInterval(demoInterval);
+      if (client) {
+        client.end();
+        client = null;
+      }
+
+      if (config.demoMode) {
+        document.getElementById('demoNotice').style.display = 'block';
+        document.getElementById('statusDot').classList.add('connected');
+        document.getElementById('statusText').textContent = 'Demo';
+        startDemoMode();
+        return;
+      }
+
+      document.getElementById('demoNotice').style.display = 'none';
+
+      const brokerUrl = `wss://${config.brokerUrl}:${config.brokerPort}/mqtt`;
+
+      try {
+        client = mqtt.connect(brokerUrl, {
+          clientId: 'dashboard_' + Math.random().toString(16).substr(2, 8),
+          username: config.brokerUser,
+          password: config.brokerPass,
+          clean: true,
+          connectTimeout: 4000,
+          reconnectPeriod: 2000,
+          keepalive: 30
+        });
+
+        client.on('connect', () => {
+          document.getElementById('statusDot').classList.add('connected');
+          document.getElementById('statusText').textContent = 'Conectado';
+
+          Object.values(topicMapping).forEach(topics => {
+            client.subscribe(topics.temp);
+            client.subscribe(topics.hum);
+          });
+        });
+
+        client.on('reconnect', () => {
+          document.getElementById('statusText').textContent = 'Reconectando con HiveMQ...';
+          document.getElementById('statusDot').style.backgroundColor = '#eab308';
+          document.getElementById('statusDot').style.boxShadow = '0 0 10px #eab308';
+        });
+
+        client.on('message', (topic, message) => {
+          handleMessage(topic, message.toString());
+        });
+
+        client.on('error', (err) => {
+          console.error('MQTT Error:', err);
+          document.getElementById('statusDot').classList.remove('connected');
+          document.getElementById('statusText').textContent = 'Error';
+        });
+
+        client.on('offline', () => {
+          document.getElementById('statusDot').classList.remove('connected');
+          document.getElementById('statusText').textContent = 'Desconectado';
+        });
+
+      } catch (err) {
+        console.error('Error conectando:', err);
+      }
+    }
+
+    function handleMessage(topic, payload) {
+      for (const [room, topics] of Object.entries(topicMapping)) {
+        if (topic === topics.temp) {
+          sensorData[room].temp = parseFloat(payload);
+          sensorData[room].lastUpdate = Date.now();
+          updateRoomDisplay(room);
+        } else if (topic === topics.hum) {
+          sensorData[room].hum = parseFloat(payload);
+          updateRoomDisplay(room);
+        }
+      }
+    }
+
+    function updateRoomDisplay(room) {
+      const data = sensorData[room];
+      const roomEl = document.getElementById(room);
+      const tempEl = document.getElementById(`temp-${room}`);
+      const humEl = document.getElementById(`hum-${room}`);
+      const updateEl = document.getElementById(`update-${room}`);
+      const deviceEl = document.getElementById(`device-${room}`);
+
+      roomEl.classList.remove('disconnected');
+
+      if (data.temp !== null) {
+        tempEl.textContent = `${data.temp.toFixed(1)}°C`;
+        tempEl.className = 'temp-display ' + getTempClass(data.temp);
+        
+        tempEl.classList.remove('updated');
+        void tempEl.offsetWidth;
+        tempEl.classList.add('updated');
+      }
+
+      if (data.hum !== null) {
+        humEl.textContent = `${data.hum.toFixed(0)}%`;
+      }
+
+      if (data.lastUpdate) {
+        const time = new Date(data.lastUpdate).toLocaleTimeString();
+        updateEl.textContent = `Actualizado: ${time}`;
+        deviceEl.textContent = 'Sensor activo';
+      }
+    }
+
+    function getTempClass(temp) {
+      if (temp < 18) return 'cold';
+      if (temp > 26) return 'hot';
+      return 'normal';
+    }
+
+    function checkTimeouts() {
+      const now = Date.now();
+
+      for (const room of Object.keys(sensorData)) {
+        const data = sensorData[room];
+        const roomEl = document.getElementById(room);
+
+        if (data.lastUpdate && (now - data.lastUpdate > timeout)) {
+          roomEl.classList.add('disconnected');
+          document.getElementById(`temp-${room}`).textContent = '--°C';
+          document.getElementById(`hum-${room}`).textContent = '--%';
+          document.getElementById(`device-${room}`).textContent = 'Sin conexión';
+          data.temp = null;
+          data.hum = null;
+        }
+      }
+    }
+
+    function startDemoMode() {
+      const rooms = ['cancha', 'makerspace', 'comedor', 'zonaverde'];
+
+      demoInterval = setInterval(() => {
+        rooms.forEach(room => {
+          if (Math.random() > 0.3) {
+            const baseTemp = 20 + Math.random() * 10;
+            const baseHum = 40 + Math.random() * 30;
+
+            sensorData[room].temp = baseTemp;
+            sensorData[room].hum = baseHum;
+            sensorData[room].lastUpdate = Date.now();
+
+            updateRoomDisplay(room);
+          }
+        });
+      }, 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const config = loadConfig();
+      document.getElementById('brokerUrl').value = config.brokerUrl;
+      document.getElementById('brokerPort').value = config.brokerPort;
+      document.getElementById('brokerUser').value = config.brokerUser || '';
+      document.getElementById('brokerPass').value = config.brokerPass || '';
+      document.getElementById('timeout').value = config.timeout;
+      document.getElementById('demoMode').checked = config.demoMode;
+
+      connectMQTT();
+      checkTimeout = setInterval(checkTimeouts, 5000);
+    });
+  </script>
+</body>
+</html>
