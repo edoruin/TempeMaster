@@ -1,0 +1,26 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Replace MQTT secrets
+        env:
+          MQTT_BROKER: ${{ secrets.MQTT_BROKER }}
+          MQTT_USER: ${{ secrets.MQTT_USER }}
+          MQTT_PASS: ${{ secrets.MQTT_PASS }}
+        run: |
+          sed -i "s|74726e31dc8a45ed98a0516a78fb9dbd.s1.eu.hivemq.cloud|${MQTT_BROKER}|g" docs/index.html
+          sed -i "s|useradmin|${MQTT_USER}|g" docs/index.html
+          sed -i "s|User123456|${MQTT_PASS}|g" docs/index.html
+          
+      - uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
