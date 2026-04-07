@@ -1,18 +1,3 @@
-# Sistema de Monitoreo de Temperatura y Humedad - Politécnico
-
-## Tabla de Contenidos
-
-1. [Resumen del Proyecto](#resumen-del-proyecto)
-2. [Arquitectura del Sistema](#arquitectura-del-sistema)
-3. [Componentes de Hardware](#componentes-de-hardware)
-4. [Software y Firmware](#software-y-firmware)
-5. [Configuración MQTT](#configuración-mqtt)
-6. [Dashboards](#dashboards)
-7. [Guía de Instalación](#guía-de-instalación)
-8. [Configuración y Credenciales](#configuración-y-credenciales)
-9. [Solución de Problemas](#solución-de-problemas)
-10. [Mantenimiento](#mantenimiento)
-11. [Futuras Mejoras](#futuras-mejoras)
 
 ---
 
