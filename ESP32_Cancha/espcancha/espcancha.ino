@@ -12,7 +12,7 @@ const char* mqtt_server = "74726e31dc8a45ed98a0516a78fb9dbd.s1.eu.hivemq.cloud";
 const int mqtt_port = 8883;
 const char* mqtt_client_id = "ESP32-CANCHA";
 const char* mqtt_user = "testadmin";
-const char* mqtt_password = "test123456";
+const char* mqtt_password = "Test123456";
 
 const char* topic_temp = "sensor/cancha/temperatura";
 const char* topic_hum = "sensor/cancha/humedad";
