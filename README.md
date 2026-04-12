@@ -5,7 +5,7 @@
 
 ### Descripción General
 
-Este proyecto implementa un **sistema IoT de monitoreo de temperatura y humedad** desarrollado para el Politécnico. El sistema permite:
+Este proyecto implementa un **sistema IoT de monitoreo de temperatura y humedad** desarrollado para la escuela. El sistema permite:
 
 - **Medir temperatura y humedad** en diferentes zonas del campus (Cancha, Makerspace, Comedor, Zona Verde)
 - **Mostrar datos en tiempo real** mediante dashboards web
